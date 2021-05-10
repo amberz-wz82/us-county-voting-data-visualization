@@ -1,0 +1,762 @@
+<html>
+
+<head>
+  <title>INFO 3300 Project 1: US Presidential Election Census</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    html {
+      background-color: rgb(43, 68, 43);
+    }
+
+    body {
+      margin: 0 auto;
+      align-items: center;
+      max-width: 850px;
+      background-color: white;
+    }
+
+    h1,
+    h2 {
+      text-align: center;
+      padding: 10px;
+    }
+
+    ul,
+    p,
+    div {
+      margin-left: 40px;
+      margin-right: 40px;
+      padding: 10px
+    }
+
+    div {
+      background-color: rgba(240, 240, 240, 0.795);
+    }
+
+    svg {
+      margin: 20px auto;
+      border: rgb(197, 197, 197) solid 2px;
+    }
+
+    .gridline line {
+      stroke: #ccc;
+    }
+
+    .gridline .domain {
+      stroke: none;
+    }
+
+    .axisLabel {
+      font-size: large;
+      fill: #303030;
+    }
+
+    svg {
+      display: block;
+      margin-bottom: 50px
+    }
+  </style>
+</head>
+
+<body>
+  <h1>INFO 3300 Project 1: US Presidential Election Census</h1>
+  <h2>By: Ian Lee, Amber Zheng, Christopher Tedeschi</h2>
+  <p>Data Source:</p>
+  <ul>
+    <li>Census: https://www.ers.usda.gov/data-products/atlas-of-rural-and-small-town-america/</li>
+    <li>Voting: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/VOQCHQ</li>
+  </ul>
+
+  <div>It can be seen that Western states have a higher affinity to the democrats while the Southern states have a
+    higher affinity towards republican. Eastern states have a similar distribution with the total count
+  </div>
+  <svg id="plot1"></svg>
+  <div>It is evident that the democrat supporting states have a higher average poverty rate and income as opposed to
+    their republican counterparts
+  </div>
+  <svg id="plot2"></svg>
+  <div>It is evident that the democrat supporting states have a higher population density and population count as
+    opposed to their republican counterparts. This could mean that democratic counties are more urban and city-like
+    while
+    republican counties are more rural and suburban.
+  </div>
+  <svg id="plot3"></svg>
+
+  <script>
+
+    // async function to handle promise objects
+    const main = async function () {
+      // Import data in csv format
+      const voting = await d3.csv("election_data.csv", d3.autoType);
+      const census = await d3.csv("final_census_data.csv", d3.autoType);
+      console.log("census", census);
+      console.log("voting", voting);
+
+      // Filter data: remove data that does not exist in both datasets
+      // Keep track of democratic and republican vote counts
+      let fipsv = 0;
+      let votingLength = voting.length;
+      census.forEach((d, i) => {
+        d["democratCount"] = 0;
+        d["republicanCount"] = 0;
+        d["totalCount"] = 0
+        while (voting[fipsv]["FIPS"] < d["FIPS"]) {
+          fipsv += 1;
+        };
+        while (fipsv < votingLength && voting[fipsv]["FIPS"] === d["FIPS"]) {
+          if (voting[fipsv]["party"] === "democrat") {
+            d["democratCount"] += voting[fipsv]["candidatevotes"];
+          };
+          if (voting[fipsv]["party"] === "republican") {
+            d["republicanCount"] += voting[fipsv]["candidatevotes"];
+          };
+          fipsv += 1;
+        };
+        d["totalCount"] = d["democratCount"] + d["republicanCount"];
+      });
+      let data = census;
+      console.log("number of data: ", data.length);
+      // calculate percentages of republican and democrat count
+      data.map(d => {
+        d["PovertyAllAgesPct"] = Math.round(d["PovertyAllAgesPct"] * 100) / 10000;
+        d["democratPct"] = Math.round(d["democratCount"] / d["totalCount"] * 10000) / 100;
+        d["republicanPct"] = Math.round(d["republicanCount"] / d["totalCount"] * 10000) / 100;
+        d["isRepublican"] = d["republicanPct"] > 50 ? 1 : 0;
+        if (d["totalCount"] === 0) {
+          d["isRepublican"] = -1
+        }
+      });
+      // categorize geographic properties
+      let west = ["WA", "CA", "OR", "MT", "ID", "WY", "NV", "UT", "CO", "NM", "AZ", "AK"];
+      let east = ["ND", "SD", "NE", "KS", "MN", "IA", "MO", "WI", "IL", "IN", "MI", "OH",
+        "PA", "NY", "NJ", "RI", "CT", "MA", "NH", "VT", "ME"];
+      let south = ['AL', 'AR', 'DE', 'FL', 'GA', 'KY', 'LA', 'MD', 'MS', 'NC',
+        'OK', 'SC', 'TN', 'TX', 'VA', 'WV', 'DC'];
+      let geo_data =
+        [{ "id": "total", "democratCount": 0, "republicanCount": 0, "democratCounty": 0, "republicanCounty": 0, "totalCount": 0 },
+        { "id": "west", "democratCount": 0, "republicanCount": 0, "democratCounty": 0, "republicanCounty": 0, "totalCount": 0 },
+        { "id": "east", "democratCount": 0, "republicanCount": 0, "democratCounty": 0, "republicanCounty": 0, "totalCount": 0 },
+        { "id": "south", "democratCount": 0, "republicanCount": 0, "democratCounty": 0, "republicanCounty": 0, "totalCount": 0 }];
+      let geo_array = [west, east, south];
+      data.forEach((d, i) => {
+        geo_data[0]["democratCount"] += d["democratCount"];
+        geo_data[0]["republicanCount"] += d["republicanCount"];
+        if (d["isRepublican"] === 1) {
+          geo_data[0]["republicanCounty"] += 1;
+        } else if (d["isRepublican"] === 0) {
+          geo_data[0]["democratCounty"] += 1;
+        }
+        geo_data[0]["totalCount"] += d["totalCount"];
+
+        geo_array.forEach((d2, i2) => {
+          let index = i2 + 1;
+          if (d2.includes(d["State"])) {
+            geo_data[index]["democratCount"] += d["democratCount"];
+            geo_data[index]["republicanCount"] += d["republicanCount"];
+            if (d["isRepublican"] === 1) {
+              geo_data[index]["republicanCounty"] += 1;
+            } else if (d["isRepublican"] === 0) {
+              geo_data[index]["democratCounty"] += 1;
+            }
+            geo_data[index]["totalCount"] += d["totalCount"];
+          }
+        })
+
+      });
+      for (let i = 0; i < 4; i++) {
+        geo_data[i]["democratCount"] = geo_data[i]["democratCount"] / geo_data[i]["totalCount"];
+        geo_data[i]["republicanCount"] = geo_data[i]["republicanCount"] / geo_data[i]["totalCount"];
+      };
+
+      console.log(geo_data);
+      console.log("filtered data", data);
+
+      // Start plotting
+
+      // chart attributes that will be the same throughout
+      const width = 540;
+      const height = 520;
+      const margin = { "top": 60, "right": 20, "bottom": 60, "left": 80 };
+      const chartWidth = width - margin.right - margin.left;
+      const chartHeight = height - margin.top - margin.bottom;
+
+      let average = (array) => array.reduce((a, b) => a + b) / array.length;
+
+      // Plot geographic data
+      const first_plot = function () {
+        const svg = d3.select("svg#plot1")
+          .attr("height", height)
+          .attr("width", width)
+          .style("background-color", "#fffff7")
+        let annotations = svg.append("g")
+          .attr("id", "annotation")
+        let graphArea = svg.append("g")
+          .attr("id", "graph")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        geo_locations = geo_data.map(d => d.id);
+        geo_population = geo_data.map(d => d.totalCount);
+        const geoScale = d3.scaleBand()
+          .padding(0.6)
+          .domain(geo_locations)
+          .range([0, chartHeight]);
+        const pctScale = d3.scaleLinear()
+          .domain([0.3, 0.7])
+          .range([0, chartWidth])
+        const opacExtent = d3.extent(geo_population)
+        const opacScale = d3.scaleLinear()
+          .domain(opacExtent)
+          .range([0.2, 0.9])
+
+        let verticalGridlines = d3.axisBottom(pctScale)
+          .tickSize(-chartHeight - 10)
+          .tickFormat("");
+        annotations.append("g")
+          .attr("class", "gridline")
+          .attr("transform", `translate(${margin.left},${chartHeight + 10 + margin.top})`)
+          .call(verticalGridlines);
+
+        let leftAxis = d3.axisLeft(geoScale)
+        annotations.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left},${margin.top})`)
+          .call(leftAxis)
+          .attr("font-size", "15px")
+          .attr("font-family", "serif");
+
+        let bottomAxis = d3.axisBottom(pctScale)
+          .tickFormat(d3.format(".0%"));
+        annotations.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left},${chartHeight + 10 + margin.top})`)
+          .call(bottomAxis);
+
+        let bars = graphArea.selectAll("g").data(geo_data, d => d['id'])
+          .join("g")
+          .attr("class", "geoBar")
+          .attr("transform", d => `translate(0,${geoScale(d["id"])})`);
+        // democrat bars
+        bars.append("line")
+          .attr("x1", 0)
+          .attr("x2", d => pctScale(d["democratCount"]))
+          .attr("y1", 0)
+          .attr("y2", 0)
+          .attr("opacity", d => opacScale(d["totalCount"]))
+          .style("stroke", "darkblue")
+          .style("stroke-width", 30);
+        bars.append("text")
+          .attr("alignment-baseline", "middle")
+          .attr("font-size", "15px")
+          .attr("fill", "darkblue")
+          .text(d => (d["democratCount"] * 100).toFixed(1))
+          .attr("x", d => pctScale(d["democratCount"]) + 10)
+          .attr("y", 0);
+        // republican bars
+        bars.append("line")
+          .attr("x1", 0)
+          .attr("x2", d => pctScale(d["republicanCount"]))
+          .attr("y1", 35)
+          .attr("y2", 35)
+          .attr("opacity", d => opacScale(d["totalCount"]))
+          .style("stroke", "red")
+          .style("stroke-width", 30);
+        bars.append("text")
+          .attr("alignment-baseline", "middle")
+          .attr("font-size", "15px")
+          .attr("fill", "darkred")
+          .text(d => (d["republicanCount"] * 100).toFixed(1))
+          .attr("x", d => pctScale(d["republicanCount"]) + 10)
+          .attr("y", 35);
+
+        let legend = annotations.append("g")
+          .attr("class", "legend")
+          .attr("transform", `translate(${margin.left + 275},${margin.top})`)
+
+        legend.append("rect")
+          .attr("height", 80)
+          .attr("width", 185)
+          .attr("fill", "white")
+          .attr("stroke", "black")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("rx", 7)
+          .attr("ry", 7);
+        legend.append("text")
+          .text("Democrat")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 100)
+          .attr("y", 20);
+        legend.append("text")
+          .text("Republican")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 100)
+          .attr("y", 40);
+        legend.append("circle")
+          .attr("cx", 80)
+          .attr("cy", 20)
+          .attr("r", 7)
+          .attr("opacity", 0.9)
+          .attr("fill", "darkblue");
+        legend.append("circle")
+          .attr("cx", 80)
+          .attr("cy", 40)
+          .attr("r", 7)
+          .attr("opacity", 0.9)
+          .attr("fill", "red");
+        legend.append("circle")
+          .attr("cx", 50)
+          .attr("cy", 20)
+          .attr("r", 7)
+          .attr("opacity", 0.55)
+          .attr("fill", "darkblue");
+        legend.append("circle")
+          .attr("cx", 50)
+          .attr("cy", 40)
+          .attr("r", 7)
+          .attr("opacity", 0.55)
+          .attr("fill", "red");
+        legend.append("circle")
+          .attr("cx", 20)
+          .attr("cy", 20)
+          .attr("r", 7)
+          .attr("opacity", 0.2)
+          .attr("fill", "darkblue");
+        legend.append("circle")
+          .attr("cx", 20)
+          .attr("cy", 40)
+          .attr("r", 7)
+          .attr("opacity", 0.2)
+          .attr("fill", "red");
+        legend.append("text")
+          .text("0%")
+          .attr("font-size", "12")
+          .attr("text-anchor", "middle")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 20)
+          .attr("y", 62);
+        legend.append("text")
+          .text("50%")
+          .attr("font-size", "12")
+          .attr("text-anchor", "middle")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 62);
+        legend.append("text")
+          .text("100%")
+          .attr("font-size", "12")
+          .attr("text-anchor", "middle")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 80)
+          .attr("y", 62);
+        legend.append("text")
+          .text("of Total Voters")
+          .attr("font-size", "14")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 100)
+          .attr("y", 62);
+        legend.append("circle")
+        // axis labels
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("class", "axisLabel")
+          .attr("x", chartWidth / 2 + margin.left)
+          .attr("y", chartHeight + margin.top + margin.bottom - 10)
+          .text("Presidential Votes (% of population)")
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("transform", `translate(${margin.left / 3},${(chartHeight + margin.top + margin.bottom) / 2}) rotate(-90)`)
+          .attr("class", "axisLabel")
+          .text("US Region")
+        // plot title
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("class", "axisLabel")
+          .attr("x", (chartWidth + margin.left) / 2)
+          .attr("y", margin.top / 2 + 10)
+          .text("2016 Presidential Election: Vote Distribution vs Geography")
+      };
+
+      // plot poverty and income level scatter plot
+      const second_plot = function () {
+        const svg = d3.select("svg#plot2")
+          .attr("height", height)
+          .attr("width", width)
+          .style("background-color", "#fffff7")
+        let annotations = svg.append("g")
+          .attr("id", "annotation")
+        let graphArea = svg.append("g")
+          .attr("id", "graph")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const povertyExtent = d3.extent(data, d => d["PovertyAllAgesPct"]);
+        const povertyScale = d3.scaleLinear()
+          .domain([0, povertyExtent[1]])
+          .range([chartHeight, 0]);
+        const incomeExtent = d3.extent(data, d => d["PerCapitaInc"]);
+        const incomeScale = d3.scaleLog()
+          .domain(incomeExtent)
+          .range([0, chartWidth]);
+        const voteScale = d3.scaleOrdinal()
+          .domain([0, 1])
+          .range(["blue", "red"]);
+
+        let horizontalGridlines = d3.axisLeft(povertyScale)
+          .tickSize(-chartWidth - 10)
+          .tickFormat("");
+        annotations.append("g")
+          .attr("class", "gridline")
+          .attr("transform", `translate(${margin.left - 10},${margin.top})`)
+          .call(horizontalGridlines);
+
+        let verticalGridlines = d3.axisBottom(incomeScale)
+          .tickSize(-chartHeight - 10)
+          .tickFormat("")
+        annotations.append("g")
+          .attr("class", "gridline")
+          .attr("transform", `translate(${margin.left},${chartHeight + 10 + margin.top})`)
+          .call(verticalGridlines);
+
+        let leftAxis = d3.axisLeft(povertyScale)
+          .tickFormat(d3.format(".0%"));
+        annotations.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left - 10},${margin.top})`)
+          .call(leftAxis);
+
+        let bottomAxis = d3.axisBottom(incomeScale)
+          .tickFormat(d3.format("$.0f"))
+        annotations.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left},${chartHeight + 10 + margin.top})`)
+          .call(bottomAxis);
+
+        let circles = graphArea.selectAll("circle").data(data)
+          .join("circle")
+          .attr("cx", d => incomeScale(d["PerCapitaInc"]))
+          .attr("cy", d => povertyScale(d["PovertyAllAgesPct"]))
+          .attr("r", "2")
+          .attr("opacity", "0.2")
+          .attr("fill", d => voteScale(d["isRepublican"]))
+
+        // average income and poverty
+        let dem_poverty = []
+        let dem_income = []
+        let rep_poverty = []
+        let rep_income = []
+        data.forEach(d => {
+          if (d.isRepublican === 1) {
+            rep_poverty.push(d.PovertyAllAgesPct)
+            rep_income.push(d.PerCapitaInc)
+          } else {
+            dem_poverty.push(d.PovertyAllAgesPct)
+            dem_income.push(d.PerCapitaInc)
+          }
+        })
+        let dem_poverty_avg = average(dem_poverty)
+        let dem_income_avg = average(dem_income)
+        let rep_poverty_avg = average(rep_poverty)
+        let rep_income_avg = average(rep_income)
+
+        graphArea.append("circle")
+          .attr("cx", incomeScale(dem_income_avg))
+          .attr("cy", povertyScale(dem_poverty_avg))
+          .attr("r", "8")
+          .attr("opacity", "0.8")
+          .attr("fill", "darkblue")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px")
+        graphArea.append("circle")
+          .attr("cx", incomeScale(rep_income_avg))
+          .attr("cy", povertyScale(rep_poverty_avg))
+          .attr("r", "8")
+          .attr("opacity", "0.8")
+          .attr("fill", "darkred")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px")
+
+        let legend = annotations.append("g")
+          .attr("class", "legend")
+          .attr("transform", `translate(${margin.left + 175},${margin.top + 10})`)
+
+        legend.append("rect")
+          .attr("height", 100)
+          .attr("width", 240)
+          .attr("fill", "white")
+          .attr("stroke", "black")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("rx", 7)
+          .attr("ry", 7);
+        legend.append("text")
+          .text(`Democrat (${geo_data[0]["democratCounty"]} counties)`)
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 20);
+        legend.append("text")
+          .text(`Republican (${geo_data[0]["republicanCounty"]} counties)`)
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 40);
+        legend.append("text")
+          .text("Democrat average")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 60);
+        legend.append("text")
+          .text("Republican average")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 80);
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 20)
+          .attr("r", 4)
+          .attr("opacity", 0.4)
+          .attr("fill", "blue");
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 40)
+          .attr("r", 4)
+          .attr("opacity", 0.4)
+          .attr("fill", "red");
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 60)
+          .attr("r", 7)
+          .attr("opacity", 0.8)
+          .attr("fill", "darkblue")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px");
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 80)
+          .attr("r", 7)
+          .attr("opacity", 0.8)
+          .attr("fill", "darkred")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px");
+        // axis labels
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("class", "axisLabel")
+          .attr("x", chartWidth / 2 + margin.left)
+          .attr("y", chartHeight + margin.top + margin.bottom - 10)
+          .text("Income Per Capita (Dollars)")
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("transform", `translate(${margin.left / 4},${(chartHeight + margin.top + margin.bottom) / 2}) rotate(-90)`)
+          .attr("class", "axisLabel")
+          .text("Percentage in Poverty (%)")
+        // plot title
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("class", "axisLabel")
+          .attr("x", (chartWidth + margin.left) / 2)
+          .attr("y", margin.top / 2 + 10)
+          .text("2016 Presidential Election: Poverty vs Income")
+      };
+
+      const third_plot = function () {
+        const svg = d3.select("svg#plot3")
+          .attr("height", height)
+          .attr("width", width)
+          .style("background-color", "#fffff7")
+        let annotations = svg.append("g")
+          .attr("id", "annotation")
+        let graphArea = svg.append("g")
+          .attr("id", "graph")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const popExtent = d3.extent(data, d => d["TotalPop2010"]);
+        const popScale = d3.scaleLog()
+          .domain(popExtent)
+          .range([0, chartWidth]);
+        const densityExtent = d3.extent(data, d => d["PopDensity2010"]);
+        const densityScale = d3.scaleLog()
+          .domain(densityExtent)
+          .range([chartHeight, 0]);
+        const voteScale = d3.scaleOrdinal()
+          .domain([0, 1])
+          .range(["blue", "red"]);
+
+        let horizontalGridlines = d3.axisLeft(densityScale)
+          .tickSize(-chartWidth - 10)
+          .tickFormat("")
+          .ticks(5);
+        annotations.append("g")
+          .attr("class", "gridline")
+          .attr("transform", `translate(${margin.left - 10},${margin.top})`)
+          .call(horizontalGridlines);
+
+        let verticalGridlines = d3.axisBottom(popScale)
+          .tickSize(-chartHeight - 10)
+          .tickFormat("")
+          .ticks(5)
+        annotations.append("g")
+          .attr("class", "gridline")
+          .attr("transform", `translate(${margin.left},${chartHeight + 10 + margin.top})`)
+          .call(verticalGridlines);
+
+        let leftAxis = d3.axisLeft(densityScale)
+          .tickFormat(d3.format(".0f"))
+          .ticks(5);
+        annotations.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left - 10},${margin.top})`)
+          .call(leftAxis);
+
+        let bottomAxis = d3.axisBottom(popScale)
+          .ticks(5)
+          .tickFormat(d3.format(".0f"));
+        annotations.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left},${chartHeight + 10 + margin.top})`)
+          .call(bottomAxis);
+
+        let circles = graphArea.selectAll("circle").data(data)
+          .join("circle")
+          .attr("cx", d => popScale(d["TotalPop2010"]))
+          .attr("cy", d => densityScale(d["PopDensity2010"]))
+          .attr("r", "2")
+          .attr("opacity", "0.2")
+          .attr("fill", d => voteScale(d["isRepublican"]))
+
+        // average population and population density
+        let dem_pop = []
+        let dem_pop_den = []
+        let rep_pop = []
+        let rep_pop_den = []
+        data.forEach(d => {
+          if (d.isRepublican === 1) {
+            rep_pop.push(d.TotalPop2010)
+            rep_pop_den.push(d.PopDensity2010)
+          } else {
+            dem_pop.push(d.TotalPop2010)
+            dem_pop_den.push(d.PopDensity2010)
+          }
+        })
+        let dem_pop_avg = average(dem_pop)
+        let dem_pop_den_avg = average(dem_pop_den)
+        let rep_pop_avg = average(rep_pop)
+        let rep_pop_den_avg = average(rep_pop_den)
+
+        graphArea.append("circle")
+          .attr("cx", popScale(dem_pop_avg))
+          .attr("cy", densityScale(dem_pop_den_avg))
+          .attr("r", "8")
+          .attr("fill", "darkblue")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px")
+        graphArea.append("circle")
+          .attr("cx", popScale(rep_pop_avg))
+          .attr("cy", densityScale(rep_pop_den_avg))
+          .attr("r", "8")
+          .attr("fill", "darkred")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px")
+
+        let legend = annotations.append("g")
+          .attr("class", "legend")
+          .attr("transform", `translate(${margin.left + 10},${margin.top + 10})`)
+
+        legend.append("rect")
+          .attr("height", 100)
+          .attr("width", 240)
+          .attr("fill", "white")
+          .attr("stroke", "black")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("rx", 7)
+          .attr("ry", 7);
+        legend.append("text")
+          .text(`Democrat (${geo_data[0]["democratCounty"]} counties)`)
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 20);
+        legend.append("text")
+          .text(`Republican (${geo_data[0]["republicanCounty"]} counties)`)
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 40);
+        legend.append("text")
+          .text("Democrat average")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 60);
+        legend.append("text")
+          .text("Republican average")
+          .attr("text-anchor", "start")
+          .attr("alignment-baseline", "middle")
+          .attr("x", 50)
+          .attr("y", 80);
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 20)
+          .attr("r", 4)
+          .attr("opacity", 0.4)
+          .attr("fill", "blue");
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 40)
+          .attr("r", 4)
+          .attr("opacity", 0.4)
+          .attr("fill", "red");
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 60)
+          .attr("r", 7)
+          .attr("opacity", 0.8)
+          .attr("fill", "darkblue")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px");
+        legend.append("circle")
+          .attr("cx", 30)
+          .attr("cy", 80)
+          .attr("r", 7)
+          .attr("opacity", 0.8)
+          .attr("fill", "darkred")
+          .attr("stroke", "white")
+          .attr("stroke-width", "2px");
+        // axis labels
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("class", "axisLabel")
+          .attr("x", chartWidth / 2 + margin.left)
+          .attr("y", chartHeight + margin.top + margin.bottom - 10)
+          .text("Total Population (people)")
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("transform", `translate(${margin.left / 3}, ${(chartHeight + margin.top + margin.bottom) / 2}) rotate(-90)`)
+          .attr("class", "axisLabel")
+          .text("Population Density (people/square mile)")
+        // plot title
+        annotations.append("text")
+          .attr("text-anchor", "middle")
+          .attr("class", "axisLabel")
+          .attr("x", (chartWidth + margin.left) / 2)
+          .attr("y", margin.top / 2 + 10)
+          .text("2016 Presidential Election: Population density vs Population count")
+      };
+
+      first_plot();
+      second_plot();
+      third_plot();
+
+    };
+
+    main();
+
+  </script>
+</body>
+
+</html>
